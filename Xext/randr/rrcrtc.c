@@ -48,6 +48,7 @@ RESTYPE RRCrtcType = 0;
 static void
 RRCrtcChanged(RRCrtcPtr crtc, Bool layoutChanged)
 {
+    RRFractionalScaleCrtcChanged(crtc);
     ScreenPtr pScreen = crtc->pScreen;
 
     crtc->changed = TRUE;
@@ -893,6 +894,7 @@ static int
 RRCrtcDestroyResource(void *value, XID pid)
 {
     RRCrtcPtr crtc = (RRCrtcPtr) value;
+    RRFractionalScaleCrtcDestroy(crtc);
     ScreenPtr pScreen = crtc->pScreen;
 
     if (pScreen) {

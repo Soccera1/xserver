@@ -104,6 +104,25 @@ RROutputCreate(ScreenPtr pScreen,
 
     pScrPriv->outputs[pScrPriv->numOutputs++] = output;
 
+    /* Desktop policy can request direct client rendering at fractional sizes.
+     * Do not derive this from DPI or transforms: that would double-scale
+     * desktops which already implement scaling through those mechanisms. */
+    Atom scaleAtom = dixAddAtom(RR_PROPERTY_XLIBRE_SCALE);
+    static const INT32 scaleRange[2] = {
+        RR_OUTPUT_SCALE_MIN, RR_OUTPUT_SCALE_MAX
+    };
+    const INT32 scale = RR_OUTPUT_SCALE_ONE;
+
+    if (scaleAtom == BAD_RESOURCE ||
+        RRConfigureOutputProperty(output, scaleAtom, FALSE, TRUE, FALSE,
+                                  2, scaleRange) != Success ||
+        RRChangeOutputProperty(output, scaleAtom, XA_INTEGER, 32,
+                               PropModeReplace, 1, &scale, FALSE,
+                               FALSE) != Success) {
+        RROutputDestroy(output);
+        return NULL;
+    }
+
     Atom nonDesktopAtom = dixAddAtom(RR_PROPERTY_NON_DESKTOP);
     if (nonDesktopAtom != BAD_RESOURCE) {
         static const INT32 values[2] = { 0, 1 };

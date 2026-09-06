@@ -520,6 +520,8 @@ if build_xorg_sdk
             'property.h',
             'ptrveloc.h',
             'randrstr.h',
+            'rrfractionalscale.h',
+            'xlibre-fractional-scaleproto.h',
             'rrtransform.h',
             'region.h',
             'regionstr.h',

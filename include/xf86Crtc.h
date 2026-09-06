@@ -898,6 +898,8 @@ extern _X_EXPORT void
 extern _X_EXPORT Bool
  xf86CrtcRotate(xf86CrtcPtr crtc);
 
+void xf86FractionalScaleRegister(xf86CrtcPtr crtc);
+
 extern _X_EXPORT void
  xf86RotateCrtcRedisplay(xf86CrtcPtr crtc, PixmapPtr dst_pixmap,
                          DrawableRec *src_drawable, RegionPtr region,

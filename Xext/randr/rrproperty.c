@@ -175,6 +175,21 @@ RRChangeOutputProperty(RROutputPtr output, Atom property, Atom type,
     RRPropertyValueRec new_value;
     bool add = FALSE;
 
+    /* This property belongs to the server, not the output driver. Validate
+     * before allocating or changing anything, including on DDX writes. */
+    Bool is_scale = property == dixGetAtomID(RR_PROPERTY_XLIBRE_SCALE);
+    if (is_scale) {
+        INT32 scale;
+
+        if (type != XA_INTEGER || format != 32)
+            return BadMatch;
+        if (mode != PropModeReplace || len != 1)
+            return BadValue;
+        memcpy(&scale, value, sizeof(scale));
+        if (scale < RR_OUTPUT_SCALE_MIN || scale > RR_OUTPUT_SCALE_MAX)
+            return BadValue;
+    }
+
     size_in_bytes = format >> 3;
 
     /* first see if property already exists */
@@ -241,7 +256,7 @@ RRChangeOutputProperty(RROutputPtr output, Atom property, Atom type,
             memcpy((char *) old_data, (char *) prop_value->data,
                    prop_value->size * size_in_bytes);
 
-        if (pending && pScrPriv->rrOutputSetProperty &&
+        if (!is_scale && pending && pScrPriv->rrOutputSetProperty &&
             !pScrPriv->rrOutputSetProperty(output->pScreen, output,
                                            prop->propertyName, &new_value)) {
             free(new_value.data);
@@ -346,7 +361,8 @@ RRGetOutputProperty(RROutputPtr output, Atom property, Bool pending)
     else {
 #if RANDR_13_INTERFACE
         /* If we can, try to update the property value first */
-        if (pScrPriv->rrOutputGetProperty)
+        if (property != dixGetAtomID(RR_PROPERTY_XLIBRE_SCALE) &&
+            pScrPriv->rrOutputGetProperty)
             pScrPriv->rrOutputGetProperty(output->pScreen, output,
                                           prop->propertyName);
 #endif
@@ -361,6 +377,13 @@ RRConfigureOutputProperty(RROutputPtr output, Atom property,
 {
     RRPropertyPtr prop = RRQueryOutputProperty(output, property);
     bool add = FALSE;
+
+    /* Keep the scale immediately effective and its advertised range stable. */
+    if (property == dixGetAtomID(RR_PROPERTY_XLIBRE_SCALE) &&
+        (pending || !range || immutable || num_values != 2 ||
+         values[0] != RR_OUTPUT_SCALE_MIN ||
+         values[1] != RR_OUTPUT_SCALE_MAX))
+        return BadAccess;
 
     if (!prop) {
         prop = RRCreateOutputProperty(property);
@@ -610,7 +633,8 @@ ProcRRDeleteOutputProperty(ClientPtr client)
         return BadName;
     }
 
-    if (prop->immutable) {
+    if (prop->immutable ||
+        stuff->property == dixGetAtomID(RR_PROPERTY_XLIBRE_SCALE)) {
         client->errorValue = stuff->property;
         return BadAccess;
     }
@@ -667,7 +691,8 @@ ProcRRGetOutputProperty(ClientPtr client)
     if (!prop)
         goto sendout;
 
-    if (prop->immutable && stuff->delete)
+    if (stuff->delete && (prop->immutable ||
+        stuff->property == dixGetAtomID(RR_PROPERTY_XLIBRE_SCALE)))
         return BadAccess;
 
     prop_value = RRGetOutputProperty(output, stuff->property, stuff->pending);

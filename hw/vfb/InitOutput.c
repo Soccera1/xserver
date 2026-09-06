@@ -77,6 +77,7 @@ from The Open Group.
 #include "miline.h"
 #include "glx_extinit.h"
 #include "randrstr.h"
+#include "rrfractionalscale.h"
 
 #ifdef GLAMOR
 #include "glamor.h"
@@ -956,6 +957,19 @@ vfbRRGetInfo(ScreenPtr pScreen, Rotation *rotations)
     return TRUE;
 }
 
+/* Xvfb provides an explicitly offscreen output target for compositor protocol
+ * tests and readback. It never advertises a physical scanout bypass. */
+static unsigned
+vfbFractionalScaleQuery(RRCrtcPtr crtc)
+{
+    return crtc->mode ? RR_FRACTIONAL_SCALE_OFFSCREEN : 0;
+}
+
+static void
+vfbFractionalScaleDamage(RRCrtcPtr crtc)
+{
+}
+
 static Bool
 vfbRandRInit(ScreenPtr pScreen)
 {
@@ -994,6 +1008,8 @@ vfbRandRInit(ScreenPtr pScreen)
         crtc = RRCrtcCreate(pScreen, pvci);
         if (!crtc)
             return FALSE;
+
+        RRFractionalScaleRegisterCrtc(crtc, vfbFractionalScaleQuery, vfbFractionalScaleDamage);
 
         /* Set gamma to avoid xrandr complaints */
         RRCrtcGammaSetSize(crtc, 256);

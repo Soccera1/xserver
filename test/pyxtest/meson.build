@@ -16,6 +16,9 @@ if pytest.found()
     pyxtest_env.set('XSERVER_BUILDDIR', meson.project_build_root())
     pyxtest_env.set('XSERVER_DIR', meson.project_source_root())
     pyxtest_env.set('PYTHONDONTWRITEBYTECODE', '1')
+    if is_variable('fractional_scale_demo')
+        pyxtest_env.set('FRACTIONAL_SCALE_DEMO', fractional_scale_demo.full_path())
+    endif
 
     if build_xvfb
         pyxtest_env.set('XVFB_PATH', xvfb_server.full_path())
@@ -55,6 +58,7 @@ if pytest.found()
         'test_font.py',
         'test_glamor.py',
         'test_glx.py',
+        'test_fractional_scale.py',
         'test_present.py',
         'test_randr.py',
         'test_record.py',

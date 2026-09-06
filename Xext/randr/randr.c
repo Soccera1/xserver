@@ -429,6 +429,7 @@ RRExtensionInit(void)
     RRCrtcInitErrorValue();
     RROutputInitErrorValue();
     RRProviderInitErrorValue();
+    RRFractionalScaleExtensionInit();
 #ifdef XINERAMA
     RRXineramaExtensionInit();
 #endif /* XINERAMA */

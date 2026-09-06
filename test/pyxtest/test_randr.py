@@ -2,11 +2,17 @@
 #
 # Security tests for RandR extension vulnerabilities.
 
+import os
 import struct
+import subprocess
+import time
 
 import pytest
 from proto import randr
-from xclient import BadIDChoice, BadLength, Extension, X11Error, X11Reply
+from xclient import (
+    BadAccess, BadIDChoice, BadLength, BadMatch, BadValue,
+    Extension, X11Error, X11Reply,
+)
 
 
 def _get_first_output(xclient, opcode):
@@ -20,13 +26,14 @@ def _get_first_output(xclient, opcode):
     if not isinstance(resp, X11Reply) or len(resp.data) < 32:
         pytest.skip("Failed to get RandR screen resources")
 
-    n_crtcs = struct.unpack_from("<H", resp.data, 16)[0]
-    n_outputs = struct.unpack_from("<H", resp.data, 18)[0]
+    bo = ">" if xclient.swapped else "<"
+    n_crtcs = struct.unpack_from(f"{bo}H", resp.data, 16)[0]
+    n_outputs = struct.unpack_from(f"{bo}H", resp.data, 18)[0]
     if n_outputs == 0:
         pytest.skip("No RandR outputs available")
 
     offset = 32 + n_crtcs * 4
-    return struct.unpack_from("<I", resp.data, offset)[0]
+    return struct.unpack_from(f"{bo}I", resp.data, offset)[0]
 
 
 @pytest.fixture
@@ -307,3 +314,218 @@ class TestRandRCreateLease:
             assert resp.error_code != BadIDChoice, (
                 "CreateLease returned BadIDChoice - lid not byte-swapped"
             )
+
+
+@pytest.fixture(params=["xclient", "xclient_swapped"])
+def scale_client(request, xserver):
+    """Exercise the scale contract in both wire byte orders."""
+    client = request.getfixturevalue(request.param)
+    ext = client.query_extension(Extension.RANDR)
+    assert ext
+    client.send_request(randr.QueryVersionRequest(opcode=ext.opcode))
+    assert isinstance(client.recv_response(), X11Reply)
+    output = _get_first_output(client, ext.opcode)
+    atom = client.intern_atom("_XLIBRE_OUTPUT_SCALE")
+    return client, ext, output, atom
+
+
+class TestFractionalScale:
+    def read_scale(self, ctx, pending=False):
+        client, ext, output, atom = ctx
+        client.send_request(randr.GetOutputPropertyRequest(
+            opcode=ext.opcode, output=output, property_atom=atom,
+            pending=pending,
+        ))
+        reply = client.recv_response()
+        assert isinstance(reply, X11Reply)
+        bo = ">" if client.swapped else "<"
+        assert reply.data[1] == 32
+        assert struct.unpack_from(f"{bo}III", reply.data, 8) == (19, 0, 1)
+        return struct.unpack_from(f"{bo}i", reply.data, 32)[0]
+
+    def change_scale(self, ctx, values, fmt=32, mode=0, type_atom=19):
+        client, ext, output, atom = ctx
+        bo = ">" if client.swapped else "<"
+        code = {8: "B", 16: "H", 32: "i"}[fmt]
+        client.send_request(randr.ChangeOutputPropertyRequest(
+            opcode=ext.opcode, output=output, property_atom=atom,
+            type_atom=type_atom, format=fmt, mode=mode,
+            data=struct.pack(f"{bo}{len(values)}{code}", *values),
+        ))
+
+    def test_default_and_range(self, scale_client):
+        assert self.read_scale(scale_client) == 120
+        client, ext, output, atom = scale_client
+        bo = ">" if client.swapped else "<"
+        # RRQueryOutputProperty
+        client.send_request(struct.pack(f"{bo}BBHII", ext.opcode, 11, 3,
+                                        output, atom))
+        reply = client.recv_response()
+        assert isinstance(reply, X11Reply)
+        assert reply.data[8:11] == bytes([0, 1, 0])
+        assert struct.unpack_from(f"{bo}ii", reply.data, 32) == (30, 960)
+
+    @pytest.mark.parametrize("scale", [30, 120, 150, 160, 180, 210, 960])
+    def test_immediate_value_and_notification(self, scale_client, scale):
+        client, ext, output, atom = scale_client
+        bo = ">" if client.swapped else "<"
+        # RROutputPropertyNotifyMask
+        client.send_request(randr.SelectInputRequest(
+            opcode=ext.opcode, window=client.root_window, enable=8,
+        ))
+        self.change_scale(scale_client, [scale])
+        event = client.recv_response()
+        assert isinstance(event, X11Reply)
+        assert event.data[0:2] == bytes([ext.first_event + 1, 2])
+        assert struct.unpack_from(f"{bo}III", event.data, 4) == (
+            client.root_window, output, atom,
+        )
+        assert event.data[20] == 0  # PropertyNewValue
+        assert self.read_scale(scale_client) == scale
+        assert self.read_scale(scale_client, pending=True) == scale
+
+    @pytest.mark.parametrize("values,fmt,mode,type_atom,error", [
+        ([0], 32, 0, 19, BadValue),
+        ([-1], 32, 0, 19, BadValue),
+        ([29], 32, 0, 19, BadValue),
+        ([961], 32, 0, 19, BadValue),
+        ([2147483647], 32, 0, 19, BadValue),
+        ([], 32, 0, 19, BadValue),
+        ([150, 180], 32, 0, 19, BadValue),
+        ([150], 32, 1, 19, BadValue),
+        ([], 32, 2, 19, BadValue),
+        ([150], 8, 0, 19, BadMatch),
+        ([150], 16, 0, 19, BadMatch),
+        ([150], 32, 0, 6, BadMatch),  # CARDINAL, not INTEGER
+    ])
+    def test_invalid_write_is_atomic(self, scale_client, values, fmt, mode,
+                                     type_atom, error):
+        self.change_scale(scale_client, values, fmt, mode, type_atom)
+        reply = scale_client[0].recv_response()
+        assert isinstance(reply, X11Error)
+        assert reply.error_code == error
+        assert self.read_scale(scale_client) == 120
+
+    @pytest.mark.parametrize("operation", ["delete", "read-delete", "configure"])
+    def test_contract_cannot_be_removed(self, scale_client, operation):
+        client, ext, output, atom = scale_client
+        bo = ">" if client.swapped else "<"
+        if operation == "delete":
+            client.send_request(struct.pack(f"{bo}BBHII", ext.opcode, 14, 3,
+                                            output, atom))
+        elif operation == "read-delete":
+            client.send_request(randr.GetOutputPropertyRequest(
+                opcode=ext.opcode, output=output, property_atom=atom,
+                delete=True,
+            ))
+        else:
+            # RRConfigureOutputProperty: cannot make scale pending.
+            client.send_request(struct.pack(f"{bo}BBHIIBB2xii", ext.opcode,
+                                            12, 6, output, atom, 1, 1, 30, 960))
+        reply = client.recv_response()
+        assert isinstance(reply, X11Error)
+        assert reply.error_code == BadAccess
+        assert self.read_scale(scale_client) == 120
+
+    def test_does_not_change_existing_output_state(self, scale_client):
+        client, ext, output, atom = scale_client
+        bo = ">" if client.swapped else "<"
+        dpi = client.intern_atom("DPI")
+
+        def snapshot():
+            client.send_request(randr.GetScreenResourcesCurrentRequest(
+                opcode=ext.opcode, window=client.root_window,
+            ))
+            resources = client.recv_response()
+            assert isinstance(resources, X11Reply)
+            n_crtcs = struct.unpack_from(f"{bo}H", resources.data, 16)[0]
+            requests = [
+                struct.pack(f"{bo}BBHII", ext.opcode, 9, 3, output, 0),
+                struct.pack(f"{bo}BBHI", 14, 0, 2, client.root_window),
+                randr.GetOutputPropertyRequest(
+                    opcode=ext.opcode, output=output, property_atom=dpi,
+                ),
+            ]
+            for i in range(n_crtcs):
+                crtc = struct.unpack_from(f"{bo}I", resources.data, 32 + i * 4)[0]
+                requests.extend([
+                    struct.pack(f"{bo}BBHII", ext.opcode, 20, 3, crtc, 0),
+                    struct.pack(f"{bo}BBHI", ext.opcode, 27, 2, crtc),
+                ])
+            result = [resources.data[8:]]
+            for req in requests:
+                client.send_request(req)
+                reply = client.recv_response()
+                assert isinstance(reply, X11Reply)
+                result.append(reply.data[8:])  # Exclude request sequence.
+            return result
+
+        before = snapshot()
+        self.change_scale(scale_client, [180])
+        assert self.read_scale(scale_client) == 180
+        assert snapshot() == before
+
+    def test_reference_client_rendering_and_input(self, scale_client, xserver):
+        demo = os.environ.get("FRACTIONAL_SCALE_DEMO")
+        if not demo:
+            pytest.skip("Set FRACTIONAL_SCALE_DEMO to the built reference client")
+        pytest.importorskip("Xlib")
+        from Xlib import X, display, protocol
+
+        def wait_for(check):
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                result = check()
+                if result:
+                    return result
+                time.sleep(0.01)
+            pytest.fail("Reference client did not reach the expected state")
+
+        dpy = display.Display(xserver.display)
+        root = dpy.screen().root
+        proc = subprocess.Popen([demo], env={**os.environ, "DISPLAY": xserver.display})
+        try:
+            def find_window():
+                assert proc.poll() is None
+                return next((w for w in root.query_tree().children
+                             if w.get_wm_name() == "XLibre fractional scaling"), None)
+
+            win = wait_for(find_window)
+
+            def has_size(width, height):
+                geometry = win.get_geometry()
+                return (geometry.width, geometry.height) == (width, height)
+
+            for scale in (120, 150, 180):
+                self.change_scale(scale_client, [scale])
+                assert self.read_scale(scale_client) == scale
+                wait_for(lambda: has_size(360 * scale // 120, 240 * scale // 120))
+
+            # At 150%, (240, 200) hits logical (160, 133.33) in the button;
+            # treating it as unscaled input would miss the button entirely.
+            def pixel():
+                return win.get_image(240, 200, 1, 1, X.ZPixmap, 0xFFFFFFFF).data
+
+            background = win.get_image(0, 0, 1, 1, X.ZPixmap, 0xFFFFFFFF).data
+            wait_for(lambda: pixel() != background)
+            before = pixel()
+            win.send_event(protocol.event.ButtonPress(
+                time=X.CurrentTime, root=root, window=win, child=X.NONE,
+                root_x=280, root_y=240, event_x=240, event_y=200,
+                state=0, detail=1, same_screen=1,
+            ), event_mask=X.ButtonPressMask)
+            dpy.flush()
+            wait_for(lambda: pixel() != before)
+
+            # Honor a WM/user resize; returning to 100% requests logical size.
+            win.configure(width=600, height=400)
+            dpy.sync()
+            wait_for(lambda: has_size(600, 400))
+            self.change_scale(scale_client, [120])
+            assert self.read_scale(scale_client) == 120
+            wait_for(lambda: has_size(360, 240))
+            assert proc.poll() is None
+        finally:
+            proc.terminate()
+            proc.wait(timeout=5)
+            dpy.close()

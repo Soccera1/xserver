@@ -32,6 +32,14 @@
 #include <X11/Xdefs.h>
 
 #include "randrstr.h"
+#include "rrfractionalscale.h"
+
+/* Client rendering scale in units of 1/120; independent of CRTC transforms.
+ * See doc/fractional-scaling.md for the client and desktop contract. */
+#define RR_PROPERTY_XLIBRE_SCALE "_XLIBRE_OUTPUT_SCALE"
+#define RR_OUTPUT_SCALE_ONE 120
+#define RR_OUTPUT_SCALE_MIN 30
+#define RR_OUTPUT_SCALE_MAX 960
 
 extern int RREventBase, RRErrorBase;
 

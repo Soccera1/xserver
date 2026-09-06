@@ -5,6 +5,15 @@ simple_xinit = executable(
     dependencies: [ xproto_dep ],
 )
 
+# Optional native fractional-scale reference client (no server dependency).
+scale_cairo_dep = dependency('cairo-xlib', required: false)
+scale_randr_dep = dependency('xrandr', version: '>= 1.5', required: false)
+if scale_cairo_dep.found() and scale_randr_dep.found()
+    fractional_scale_demo = executable(
+        'fractional-scale-demo', 'fractional-scale-demo.c',
+        dependencies: [x11_dep, scale_cairo_dep, scale_randr_dep])
+endif
+
 piglit_env = environment()
 piglit_env.set('XSERVER_DIR', meson.project_source_root())
 piglit_env.set('XSERVER_BUILDDIR', meson.project_build_root())

@@ -39,6 +39,55 @@
 #include "xf86Crtc.h"
 #include "xf86Modes.h"
 #include "xf86RandR12.h"
+#include "rrfractionalscale.h"
+#include "inputstr.h"
+#include "hw/xfree86/ramdac/xf86CursorPriv.h"
+
+static void xf86CrtcDamageShadow(xf86CrtcPtr crtc);
+
+/* Only advertise paths on which this file owns the final physical shadow. */
+static unsigned
+xf86FractionalScaleQuery(RRCrtcPtr rrcrtc)
+{
+    xf86CrtcPtr crtc = rrcrtc->devPrivate;
+    ScreenPtr screen = rrcrtc->pScreen;
+    if (!dixPrivateKeyRegistered(&xf86CursorScreenKeyRec))
+        return 0;
+    xf86CursorScreenPtr cursor = dixLookupPrivate(&screen->devPrivates,
+                                                   &xf86CursorScreenKeyRec);
+    if (screen->isGPU || !crtc->enabled || !crtc->transform_in_use ||
+        !crtc->rotatedData ||
+        (crtc->driverIsPerformingTransform & XF86DriverTransformOutput) ||
+        !cursor || (cursor->CurrentCursor && cursor->SWCursor))
+        return 0;
+    /* The initial backend covers uniform scaling, not rotated/projective
+     * viewports. Extra master pointers may use software sprites in the root. */
+    PictTransform *t = &crtc->crtc_to_framebuffer;
+    if (crtc->rotation != RR_Rotate_0 || t->matrix[0][0] <= 0 ||
+        t->matrix[0][0] != t->matrix[1][1] || t->matrix[0][1] ||
+        t->matrix[1][0] || t->matrix[2][0] || t->matrix[2][1] ||
+        t->matrix[2][2] != (1 << 16))
+        return 0;
+    for (DeviceIntPtr dev = inputInfo.devices; dev; dev = dev->next)
+        if (dev->enabled && dev->type == MASTER_POINTER && dev != inputInfo.pointer)
+            return 0;
+    return RR_FRACTIONAL_SCALE_OUTPUT;
+}
+
+static void
+xf86FractionalScaleDamage(RRCrtcPtr rrcrtc)
+{
+    xf86CrtcPtr crtc = rrcrtc->devPrivate;
+    if (rrcrtc->pScreen->root && crtc->enabled && crtc->transform_in_use)
+        xf86CrtcDamageShadow(crtc);
+}
+
+/* Keep backend registration out of the driver's CRTC ABI. */
+void
+xf86FractionalScaleRegister(xf86CrtcPtr crtc)
+{
+    RRFractionalScaleRegisterCrtc(crtc->randr_crtc, xf86FractionalScaleQuery, xf86FractionalScaleDamage);
+}
 
 void
 xf86RotateCrtcRedisplay(xf86CrtcPtr crtc, PixmapPtr dst_pixmap,
@@ -56,6 +105,12 @@ xf86RotateCrtcRedisplay(xf86CrtcPtr crtc, PixmapPtr dst_pixmap,
 
     if (crtc->driverIsPerformingTransform & XF86DriverTransformOutput)
         return;
+
+    /* Already physical pixels: bypass both the transform and its filter. */
+    if (transform_src && RRFractionalScaleCopyFrame(crtc->randr_crtc, dst_pixmap)) {
+        crtc->shadowClear = FALSE;
+        return;
+    }
 
     src = CreatePicture(None,
                         src_drawable,

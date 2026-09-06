@@ -6,6 +6,7 @@ srcs_randr = [
     'rrlease.c',
     'rrmode.c',
     'rrmonitor.c',
+    'rrfractionalscale.c',
     'rroutput.c',
     'rrpointer.c',
     'rrproperty.c',

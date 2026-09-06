@@ -1739,6 +1739,8 @@ xf86RandR12CreateObjects12(ScreenPtr pScreen)
         xf86CrtcPtr crtc = config->crtc[c];
 
         crtc->randr_crtc = RRCrtcCreate(pScreen, crtc);
+        if (crtc->randr_crtc)
+            xf86FractionalScaleRegister(crtc);
     }
     /*
      * Configure outputs

@@ -22,11 +22,11 @@ srcs = [
     '../stubs/ddxBeforeReset.c',
 ]
 
-xcb_dep = dependency('xcb', required: true)
-xcb_aux_dep = dependency('xcb-aux', required: true)
-xcb_shape_dep = dependency('xcb-shape', required: true)
-xcb_icccm_dep = dependency('xcb-icccm', required: true)
-xcb_xkb_dep = dependency('xcb-xkb', required: true)
+xcb_dep = dependency('xcb', static: build_static, required: true)
+xcb_aux_dep = dependency('xcb-aux', static: build_static, required: true)
+xcb_shape_dep = dependency('xcb-shape', static: build_static, required: true)
+xcb_icccm_dep = dependency('xcb-icccm', static: build_static, required: true)
+xcb_xkb_dep = dependency('xcb-xkb', static: build_static, required: true)
 
 executable(
     'Xnest',

@@ -18,7 +18,7 @@ if build_kdrive_linux
     build_kdrive_mouse = get_option('kdrive_mouse')
     build_kdrive_evdev = get_option('kdrive_evdev')
     build_kdrive_tslib = get_option('kdrive_tslib')
-    tslib_dep = dependency('tslib', required : build_kdrive_tslib)
+    tslib_dep = dependency('tslib', static: build_static, required : build_kdrive_tslib)
     subdir('os/linux')
 endif
 

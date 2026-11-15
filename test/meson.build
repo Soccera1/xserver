@@ -5,6 +5,17 @@ simple_xinit = executable(
     dependencies: [ xproto_dep ],
 )
 
+if dri_dep.found()
+    static_dri_test = executable(
+        'static-dri-test',
+        ['static-dri.c', '../Xext/glx/glx_dri/glxdriload.c'],
+        include_directories: [inc, include_directories('.')],
+        dependencies: [dri_headers_dep, xproto_dep, pixman_dep],
+        c_args: ['-DXSERVER_STATIC', '-DGLX_BUILTIN_DRI_DRIVERS="builtin-dri-drivers.h"'],
+    )
+    test('static DRI loader', static_dri_test, suite: 'static')
+endif
+
 piglit_env = environment()
 piglit_env.set('XSERVER_DIR', meson.project_source_root())
 piglit_env.set('XSERVER_BUILDDIR', meson.project_build_root())

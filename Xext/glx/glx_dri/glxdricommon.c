@@ -25,10 +25,8 @@
 
 #include <dix-config.h>
 
-#include <ctype.h>
 #include <stdint.h>
 #include <errno.h>
-#include <dlfcn.h>
 #include <sys/time.h>
 #include <GL/gl.h>
 #include <GL/glxtokens.h>
@@ -274,118 +272,4 @@ glxConvertConfigs(const __DRIcoreExtension * core,
     }
 
     return head.next;
-}
-
-static const char dri_driver_path[] = DRI_DRIVER_PATH;
-
-/* Temporary define to allow building without a dri_interface.h from
- * updated Mesa.  Some day when we don't care about Mesa that old any
- * more this can be removed.
- */
-#ifndef __DRI_DRIVER_GET_EXTENSIONS
-#define __DRI_DRIVER_GET_EXTENSIONS "__driDriverGetExtensions"
-#endif
-
-void *
-glxProbeDriver(const char *driverName,
-               void **coreExt, const char *coreName, int coreVersion,
-               void **renderExt, const char *renderName, int renderVersion)
-{
-    void *driver;
-    char filename[PATH_MAX];
-    char *get_extensions_name;
-    const __DRIextension **extensions = NULL;
-    const char *path = NULL;
-
-    /* Search in LIBGL_DRIVERS_PATH if we're not setuid. */
-    if (!PrivsElevated())
-        path = getenv("LIBGL_DRIVERS_PATH");
-
-    if (!path)
-        path = dri_driver_path;
-
-    do {
-        const char *next;
-        int path_len;
-
-        next = strchr(path, ':');
-        if (next) {
-            path_len = next - path;
-            next++;
-        } else {
-            path_len = strlen(path);
-            next = NULL;
-        }
-
-        snprintf(filename, sizeof filename, "%.*s/%s_dri.so", path_len, path,
-                 driverName);
-
-        driver = dlopen(filename, RTLD_LAZY | RTLD_LOCAL);
-        if (driver != NULL)
-            break;
-
-        LogMessage(X_ERROR, "AIGLX error: dlopen of %s failed (%s)\n",
-                   filename, dlerror());
-
-        path = next;
-    } while (path);
-
-    if (driver == NULL) {
-        LogMessage(X_ERROR, "AIGLX error: unable to load driver %s\n",
-                  driverName);
-        goto cleanup_failure;
-    }
-
-    if (asprintf(&get_extensions_name, "%s_%s",
-                 __DRI_DRIVER_GET_EXTENSIONS, driverName) != -1) {
-        const __DRIextension **(*get_extensions)(void);
-
-        for (unsigned int i = 0; i < strlen(get_extensions_name); i++) {
-            /* Replace all non-alphanumeric characters with underscore,
-             * since they are not allowed in C symbol names. That fixes up
-             * symbol name for drivers with '-drm' suffix
-             */
-            if (!isalnum((unsigned char)get_extensions_name[i]))
-                get_extensions_name[i] = '_';
-        }
-
-        get_extensions = dlsym(driver, get_extensions_name);
-        if (get_extensions)
-            extensions = get_extensions();
-        free(get_extensions_name);
-    }
-
-    if (!extensions)
-        extensions = dlsym(driver, __DRI_DRIVER_EXTENSIONS);
-    if (extensions == NULL) {
-        LogMessage(X_ERROR, "AIGLX error: %s exports no extensions (%s)\n",
-                   driverName, dlerror());
-        goto cleanup_failure;
-    }
-
-    for (unsigned int i = 0; extensions[i]; i++) {
-        if (strcmp(extensions[i]->name, coreName) == 0 &&
-            extensions[i]->version >= coreVersion) {
-            *coreExt = (void *) extensions[i];
-        }
-
-        if (strcmp(extensions[i]->name, renderName) == 0 &&
-            extensions[i]->version >= renderVersion) {
-            *renderExt = (void *) extensions[i];
-        }
-    }
-
-    if (*coreExt == NULL || *renderExt == NULL) {
-        LogMessage(X_ERROR,
-                   "AIGLX error: %s does not export required DRI extension\n",
-                   driverName);
-        goto cleanup_failure;
-    }
-    return driver;
-
- cleanup_failure:
-    if (driver)
-        dlclose(driver);
-    *coreExt = *renderExt = NULL;
-    return NULL;
 }

@@ -32,23 +32,35 @@ srcs_glxdri2 = []
 if build_glx_dri
     srcs_glx += 'glx_dri/glxdriswrast.c'
     srcs_glx += 'glx_dri/glxdricommon.c'
+    srcs_glx += 'glx_dri/glxdriload.c'
 
     if build_dri2 or build_dri3
         srcs_glxdri2 = files('glx_dri/glxdri2.c')
     endif
 endif
 
+if build_static and build_glx_dri
+    static_dri_conf = configuration_data()
+    static_dri_conf.set('BUILTIN_DRI_DRIVERS', '\n'.join(static_dri_entries))
+    configure_file(
+        input: 'glx_dri/builtin-dri-drivers.h.in',
+        output: 'builtin-dri-drivers.h',
+        configuration: static_dri_conf,
+    )
+endif
+
 libxserver_glx = []
 if build_glx
     libxserver_glx = static_library('xserver_glx',
         srcs_glx,
-        include_directories: inc,
+        include_directories: [inc, include_directories('.')],
         dependencies: [
             common_dep,
             dl_dep,
             dri_dep,
+            static_dri_dep,
             dependency('glproto', version: '>= 1.4.17'),
-            dependency('gl', version: '>= 1.2'),
+            dependency('gl', version: '>= 1.2', static: build_static),
         ],
         c_args: [
             glx_align64,
@@ -74,7 +86,7 @@ if build_glx
             common_dep,
             dl_dep,
             dependency('glproto', version: '>= 1.4.17'),
-            dependency('gl', version: '>= 1.2'),
+            dependency('gl', version: '>= 1.2', static: build_static),
         ],
     )
 endif

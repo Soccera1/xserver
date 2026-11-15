@@ -35,9 +35,6 @@ struct __GLXDRIconfig {
 __GLXconfig *glxConvertConfigs(const __DRIcoreExtension * core,
                                const __DRIconfig ** configs);
 
-void *glxProbeDriver(const char *name,
-                     void **coreExt, const char *coreName, int coreVersion,
-                     void **renderExt, const char *renderName,
-                     int renderVersion);
+#include "glxdriload.h"
 
 #endif

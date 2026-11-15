@@ -38,8 +38,9 @@ if int10 == 'x86emu'
     int10_link += xorg_x86emu
 endif
 
-xorg_int10 = shared_module('int10',
+xorg_int10 = build_target('int10',
     srcs_xorg_int10,
+    target_type: xorg_module_type,
     include_directories: [
         inc,
         xorg_inc,
@@ -49,6 +50,8 @@ xorg_int10 = shared_module('int10',
     link_with: int10_link,
     c_args: int10_c_args,
 
-    install: true,
+    install: not build_static,
     install_dir: module_abi_dir,
 )
+xorg_modules += xorg_int10
+xorg_builtin_modules += 'BUILTIN_MODULE(int10, "")'

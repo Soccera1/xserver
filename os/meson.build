@@ -90,7 +90,7 @@ if srcs_libc.length() > 0
 endif
 
 if enable_input_thread
-    os_dep += cc.find_library('pthread')
+    os_dep += cc.find_library('pthread', static: build_static)
 endif
 
 libxserver_os = static_library('xserver_os',
@@ -102,7 +102,7 @@ libxserver_os = static_library('xserver_os',
         dl_dep,
         sha1_dep,
         os_dep,
-        dependency('xau')
+        dependency('xau', static: build_static)
     ],
     c_args: os_c_args,
     link_with: libxlibc,

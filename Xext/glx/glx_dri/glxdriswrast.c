@@ -31,7 +31,6 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/time.h>
-#include <dlfcn.h>
 
 #include <GL/gl.h>
 #include <GL/internal/dri_interface.h>
@@ -394,7 +393,7 @@ __glXDRIscreenDestroy(__GLXscreen * baseScreen)
 
     (*screen->core->destroyScreen) (screen->driScreen);
 
-    dlclose(screen->driver);
+    glxReleaseDriver(screen->driver);
 
     __glXScreenDestroy(baseScreen);
 
@@ -462,7 +461,7 @@ __glXDRIscreenProbe(ScreenPtr pScreen)
 
  handle_error:
     if (screen->driver)
-        dlclose(screen->driver);
+        glxReleaseDriver(screen->driver);
 
     free(screen);
 

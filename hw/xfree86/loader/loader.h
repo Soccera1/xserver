@@ -73,4 +73,9 @@ extern Bool is_nvidia_proprietary;
 /* Internal Functions */
 void *LoaderOpen(const char *, int *);
 
+#ifdef XORG_STATIC
+/* Return an owned, NULL-terminated list of built-in modules in a subdirectory. */
+const char **LoaderListBuiltinModules(const char *subdir);
+#endif
+
 #endif                          /* _LOADER_H */

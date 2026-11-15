@@ -68,7 +68,9 @@ typedef struct _pattern {
 } PatternRec, *PatternPtr;
 
 /* Prototypes for static functions */
+#ifndef XORG_STATIC
 static char *FindModule(const char *, const char *, PatternPtr);
+#endif
 static Bool CheckVersion(const char *, XF86ModuleVersionInfo *,
                          const XF86ModReqInfo *);
 static char *LoaderGetCanonicalName(const char *, PatternPtr);
@@ -242,6 +244,7 @@ LoaderSetPath(const char *driver, const char *path)
  * Get a default search path or a search path for a specific driver
  * and make it effective
  */
+#ifndef XORG_STATIC
 static char **
 LoaderGetPath(const char *module)
 {
@@ -258,8 +261,10 @@ LoaderGetPath(const char *module)
 
     return defaultPathList;
 }
+#endif
 
 /* Standard set of module subdirectories to search, in order of preference */
+#ifndef XORG_STATIC
 static const char *stdSubdirs[] = {
     // first try loading from per-ABI subdir
     XORG_MODULE_ABI_TAG "/",
@@ -270,6 +275,7 @@ static const char *stdSubdirs[] = {
     "",
     NULL
 };
+#endif
 
 /*
  * Standard set of module name patterns to check, in order of preference
@@ -352,6 +358,7 @@ FreePatterns(PatternPtr patterns)
         free(patterns);
 }
 
+#ifndef XORG_STATIC
 static char *
 FindModuleInSubdir(const char *dirpath, const char *module)
 {
@@ -512,10 +519,14 @@ _LoaderListDir(const char *subdir, const char **patternlist, int *saved_len)
     *saved_len = ret ? n : 0;
     return (const char **) ret;
 }
+#endif
 
 const char **
 LoaderListDir(const char *subdir, const char **patternlist)
 {
+#ifdef XORG_STATIC
+    return LoaderListBuiltinModules(subdir);
+#else
     size_t len = 0;
     const char **ret = NULL;
     size_t subdirlen = strlen(subdir);
@@ -555,6 +566,7 @@ LoaderListDir(const char *subdir, const char **patternlist)
         ret[len] = NULL;
     }
     return ret;
+#endif
 }
 
 static Bool
@@ -797,10 +809,12 @@ LoadModule(const char *module, void *options, const XF86ModReqInfo *modreq,
            int *errmaj)
 {
     XF86ModuleData *initdata = NULL;
+#ifndef XORG_STATIC
     char **pathlist = NULL;
+    char **path_elem = NULL;
+#endif
     char *found = NULL;
     char *name = NULL;
-    char **path_elem = NULL;
     char *p = NULL;
     ModuleDescPtr ret = NULL;
     PatternPtr patterns = NULL;
@@ -874,6 +888,9 @@ LoadModule(const char *module, void *options, const XF86ModReqInfo *modreq,
         goto LoadModule_fail;
     }
 
+#ifdef XORG_STATIC
+    ret->handle = LoaderOpen(name, errmaj);
+#else
     pathlist = LoaderGetPath(name);
     if (!pathlist) {
         /* This could be a calloc failure too */
@@ -912,6 +929,7 @@ LoadModule(const char *module, void *options, const XF86ModReqInfo *modreq,
         goto LoadModule_fail;
     }
     ret->handle = LoaderOpen(found, errmaj);
+#endif
     if (ret->handle == NULL)
         goto LoadModule_fail;
 

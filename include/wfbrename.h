@@ -122,4 +122,9 @@
 #define free_pixman_pict wfb_free_pixman_pict
 #define image_from_pict wfb_image_from_pict
 
+/* These entry points also share the executable namespace in static builds. */
+#define fbRealizeWindow wfbRealizeWindow
+#define fbInstallColormap wfbInstallColormap
+#define mfbCreateColormap wfbCreateColormap
+
 #endif /* XSERVER_WFBRENAME_H */

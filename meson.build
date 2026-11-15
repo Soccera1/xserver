@@ -11,6 +11,17 @@ release_date = '2026-06-21'
 
 cc = meson.get_compiler('c')
 
+build_static = get_option('static')
+if build_static
+    if host_machine.system() != 'linux'
+        error('Static servers are currently supported on Linux only')
+    endif
+    if not cc.has_link_argument('-static')
+        error('The compiler does not support static linking')
+    endif
+    add_project_link_arguments('-static', language: 'c')
+endif
+
 add_project_arguments('-fno-strict-aliasing', language : 'c')
 add_project_arguments('-fvisibility=hidden', language : 'c')
 add_project_arguments('-fno-common', language: 'c')
@@ -90,7 +101,7 @@ gbm_req = '>= 10.2'
 xf86dgaproto_req = '>= 2.0.99.1'
 xshmfence_req = '>= 1.1'
 
-x11_dep = dependency('x11')
+x11_dep = dependency('x11', static: build_static)
 xproto_dep = dependency('xproto', version: xproto_req, fallback: ['xorgproto', 'ext_xorgproto'])
 randrproto_dep = dependency('randrproto', version: '>= 1.6.0', fallback: ['xorgproto', 'ext_xorgproto'])
 renderproto_dep = dependency('renderproto', version: '>= 0.11', fallback: ['xorgproto', 'ext_xorgproto'])
@@ -115,26 +126,26 @@ dri3proto_dep = dependency('dri3proto', version: '>= 1.4', fallback: ['xorgproto
 xineramaproto_dep = dependency('xineramaproto', fallback: ['xorgproto', 'ext_xorgproto'])
 xf86vidmodeproto_dep = dependency('xf86vidmodeproto', version: '>= 2.2.99.1', fallback: ['xorgproto', 'ext_xorgproto'])
 applewmproto_dep = dependency('applewmproto', version: '>= 1.4', fallback: ['xorgproto', 'ext_xorgproto'], required: false)
-xshmfence_dep = dependency('xshmfence', version: xshmfence_req, required: false)
+xshmfence_dep = dependency('xshmfence', version: xshmfence_req, required: false, static: build_static)
 dpmsproto_dep = dependency('dpmsproto', version: '>= 1.2', required: get_option('dpms'))
 
-pixman_dep = dependency('pixman-1')
-libbsd_dep = dependency('libbsd-overlay', required: false)
+pixman_dep = dependency('pixman-1', static: build_static)
+libbsd_dep = dependency('libbsd-overlay', required: false, static: build_static)
 xkbcomp_dep = dependency('xkbcomp', required: false)
-xkbfile_dep = dependency('xkbfile')
-xfont2_dep = dependency('xfont2', version: '>= 2.0')
+xkbfile_dep = dependency('xkbfile', static: build_static)
+xfont2_dep = dependency('xfont2', version: '>= 2.0', static: build_static)
 
 dbus_required = get_option('systemd_logind') == 'true'
-dbus_dep = dependency('dbus-1', version: '>= 1.0', required: dbus_required)
+dbus_dep = dependency('dbus-1', version: '>= 1.0', required: dbus_required, static: build_static)
 
 seat_libseat_required = get_option('seatd_libseat') == 'true'
-seat_libseat_dep = dependency('libseat', version: '>= 0.9.1', required: seat_libseat_required)
+seat_libseat_dep = dependency('libseat', version: '>= 0.9.1', required: seat_libseat_required, static: build_static)
 
 build_systemd = get_option('systemd_notify') == 'true'
 # libsystemd-daemon was moved into libsystemd in version 209
-libsystemd_daemon_dep = dependency('libsystemd', version: '>= 209', required: false)
+libsystemd_daemon_dep = dependency('libsystemd', version: '>= 209', required: false, static: build_static)
 if not libsystemd_daemon_dep.found()
-    libsystemd_daemon_dep = dependency('libsystemd-daemon', required: false)
+    libsystemd_daemon_dep = dependency('libsystemd-daemon', required: false, static: build_static)
 endif
 
 build_hashtable = false
@@ -204,7 +215,7 @@ endif
 
 udev_option = get_option('udev')
 udev_kms_option = get_option('udev_kms')
-if not dependency('libudev', required: (udev_option == 'true' or udev_kms_option == 'true')).found()
+if not dependency('libudev', required: (udev_option == 'true' or udev_kms_option == 'true'), static: build_static).found()
     udev_option = 'false'
     udev_kms_option = 'false'
 endif
@@ -246,7 +257,7 @@ endif
 
 if build_xorg
     build_xorg_sdk = true
-    libxcvt_dep = dependency('libxcvt', fallback: ['libxcvt', 'libxcvt_dep'], required: build_xorg)
+    libxcvt_dep = dependency('libxcvt', fallback: ['libxcvt', 'libxcvt_dep'], required: build_xorg, static: build_static)
 endif
 
 xorgsdkdir = join_paths(get_option('prefix'), get_option('includedir'), 'xorg')
@@ -343,7 +354,7 @@ endif
 hal_dep = []
 if hal_option == 'auto'
     if not build_udev
-        hal_dep = dependency('hal', required: false)
+        hal_dep = dependency('hal', required: false, static: build_static)
         build_hal = hal_dep.found()
     else
         build_hal = false
@@ -351,7 +362,7 @@ if hal_option == 'auto'
 else
     build_hal = hal_option == 'true'
     if build_hal
-        hal_dep = dependency('hal')
+        hal_dep = dependency('hal', static: build_static)
     endif
 endif
 
@@ -366,10 +377,13 @@ if build_udev and build_hal
 endif
 
 build_dbus = build_hal or build_systemd_logind
+if not build_dbus
+    dbus_dep = []
+endif
 
 udev_dep = dependency('', required:false)
 if build_udev or build_udev_kms
-    udev_dep = dependency('libudev', version: '>= 143')
+    udev_dep = dependency('libudev', version: '>= 143', static: build_static)
 endif
 
 log_dir = get_option('log_dir')
@@ -380,15 +394,15 @@ endif
 module_dir = join_paths(get_option('libdir'), get_option('module_dir'))
 
 if glamor_option == 'auto'
-    build_glamor = build_xorg
+    build_glamor = build_xorg and not build_static
 else
     build_glamor = glamor_option == 'true'
 endif
 
-gbm_dep = dependency('gbm', version: gbm_req, required: false)
+gbm_dep = dependency('gbm', version: gbm_req, required: false, static: build_static)
 epoxy_dep = dependency('', required: false)
 if build_glamor
-    epoxy_dep = dependency('epoxy', required: false)
+    epoxy_dep = dependency('epoxy', required: true, static: build_static)
 endif
 
 gbm_option = get_option('gbm')
@@ -444,33 +458,33 @@ foreach t : test_sha1
             sha1_dep = dependency('', required: false)
         endif
     elif t == 'libmd'
-        md_dep = cc.find_library('md', required: false)
+        md_dep = cc.find_library('md', required: false, static: build_static)
         if md_dep.found()
             sha1_found = true
             sha1_dep = md_dep
         endif
     elif t == 'libsha1'
-        libsha1_dep = dependency('libsha1', required: false)
+        libsha1_dep = dependency('libsha1', required: false, static: build_static)
         if libsha1_dep.found()
             sha1_found = true
             sha1_dep = libsha1_dep
         endif
     elif t == 'libnettle'
-        nettle_dep = dependency('nettle', version: '>= 2.6', required: false)
+        nettle_dep = dependency('nettle', version: '>= 2.6', required: false, static: build_static)
         if nettle_dep.found()
             sha1_found = true
             sha1_dep = nettle_dep
         endif
     elif t == 'libgcrypt'
-        gcrypt_dep = dependency('libgcrypt', required: false)
+        gcrypt_dep = dependency('libgcrypt', required: false, static: build_static)
         if gcrypt_dep.found()
             sha1_found = true
             sha1_dep = gcrypt_dep
         endif
     elif t == 'libcrypto'
         # we don't need all of OpenSSL, just libcrypto
-        libcrypto_dep = cc.find_library('crypto', required: false)
-        openssl_dep = dependency('openssl', required: false)
+        libcrypto_dep = cc.find_library('crypto', required: false, static: build_static)
+        openssl_dep = dependency('openssl', required: false, static: build_static)
         if libcrypto_dep.found() or openssl_dep.found()
             sha1_found = true
             if libcrypto_dep.found()
@@ -498,7 +512,7 @@ else
 endif
 
 build_xdmcp = get_option('xdmcp')
-xdmcp_dep = dependency('xdmcp', required : build_xdmcp)
+xdmcp_dep = dependency('xdmcp', required : build_xdmcp, static: build_static)
 
 has_xdm_auth = get_option('xdm-auth-1')
 
@@ -511,7 +525,11 @@ if build_glx
     build_hashtable = true
 endif
 
-dri_dep = dependency('dri', required: false)
+dri_dep = dependency('dri', required: false, static: build_static)
+dri_headers_dep = []
+if dri_dep.found()
+    dri_headers_dep = dri_dep.partial_dependency(compile_args: true, includes: true)
+endif
 
 glx_dri_opt = get_option('glx_dri')
 build_glx_dri = (glx_dri_opt != 'false')
@@ -525,7 +543,54 @@ if not dri_dep.found()
     endif
 endif
 
-libdrm_dep = dependency('libdrm', version: libdrm_req, required: false)
+static_dri_drivers = get_option('static_dri_drivers')
+static_dri_package = get_option('static_dri_dependency')
+static_dri_dep = []
+static_dri_entries = []
+if static_dri_drivers.length() > 0 or static_dri_package != ''
+    if not build_static or not build_glx or glx_dri_opt == 'false'
+        error('static_dri_drivers and static_dri_dependency require -Dstatic=true -Dglx=true and GLX DRI backends')
+    endif
+    if static_dri_drivers.length() == 0 or static_dri_package == ''
+        error('Set both static_dri_drivers and static_dri_dependency to link DRI drivers into GLX')
+    endif
+    if not dri_dep.found()
+        error('Static GLX DRI drivers require dri.pc and the Mesa DRI interface headers')
+    endif
+    static_dri_dep = dependency(static_dri_package, method: 'pkg-config', static: true)
+    registered_dri_drivers = []
+    foreach driver : static_dri_drivers
+        if driver == '' or driver.replace('-', '_') != driver.underscorify()
+            error('Static DRI driver names may contain only letters, digits, underscores and hyphens')
+        endif
+        if driver in registered_dri_drivers
+            error('Duplicate static DRI driver: ' + driver)
+        endif
+        registered_dri_drivers += driver
+        symbol = '__driDriverGetExtensions_' + driver.underscorify()
+        if not cc.has_function(symbol,
+            prefix: '#include <GL/internal/dri_interface.h>\n' +
+                    'extern const __DRIextension **' + symbol + '(void);',
+            dependencies: [dri_headers_dep, static_dri_dep],
+            args: '-static',
+        )
+            error('Cannot statically link ' + symbol + ' from ' + static_dri_package +
+                  '; check its archives and pkg-config private dependencies')
+        endif
+        static_dri_entries += 'BUILTIN_DRI_DRIVER("' + driver + '", ' + symbol + ')'
+    endforeach
+endif
+if build_static and build_glx_dri and static_dri_drivers.length() == 0
+    if glx_dri_opt == 'true'
+        error('Static GLX DRI requires static_dri_drivers and static_dri_dependency')
+    endif
+    build_glx_dri = false
+endif
+if build_static and build_glx and not build_glx_dri and not build_glamor
+    error('Static GLX requires built-in DRI drivers or -Dglamor=true; see doc/static-build.md')
+endif
+
+libdrm_dep = dependency('libdrm', version: libdrm_req, required: false, static: build_static)
 
 if get_option('dri1') == 'auto'
     build_dri1 = xf86driproto_dep.found() and libdrm_dep.found()
@@ -636,8 +701,8 @@ endif
 
 legacy_nvidia_padding = get_option('legacy_nvidia_padding')
 
-m_dep = cc.find_library('m', required : false)
-dl_dep = cc.find_library('dl', required : false)
+m_dep = cc.find_library('m', required : false, static: build_static)
+dl_dep = cc.find_library('dl', required : false, static: build_static)
 
 common_dep = [
     xproto_dep,
@@ -652,7 +717,7 @@ common_dep = [
     xcmiscproto_dep,
     bigreqsproto_dep,
     presentproto_dep,
-    libsystemd_daemon_dep,
+    build_systemd ? libsystemd_daemon_dep : [],
 
     videoproto_dep,
     compositeproto_dep,
@@ -694,9 +759,9 @@ inc = include_directories(
 
 build_xselinux = false
 if get_option('xselinux') != 'false'
-    dep_selinux = dependency('libselinux', version: libselinux_req,
+    dep_selinux = dependency('libselinux', version: libselinux_req, static: build_static,
 			     required: get_option('xselinux') == 'true')
-    dep_audit = dependency('audit', required: get_option('xselinux') == 'true')
+    dep_audit = dependency('audit', required: get_option('xselinux') == 'true', static: build_static)
     if get_option('xselinux') == 'true'
         build_xselinux = true
     else
@@ -716,7 +781,7 @@ if host_machine.system() == 'windows'
 endif
 
 if get_option('libunwind')
-    common_dep += dependency('libunwind', required: true)
+    common_dep += dependency('libunwind', required: true, static: build_static)
 endif
 
 top_dir_inc = include_directories('.')

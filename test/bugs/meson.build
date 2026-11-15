@@ -1,6 +1,6 @@
-xcb_dep = dependency('xcb', required: false)
-xcb_image_dep = dependency('xcb-image', required: false)
-xcb_util_dep = dependency('xcb-util', required: false)
+xcb_dep = dependency('xcb', static: build_static, required: false)
+xcb_image_dep = dependency('xcb-image', static: build_static, required: false)
+xcb_util_dep = dependency('xcb-util', static: build_static, required: false)
 
 if get_option('xvfb')
     xvfb_args = [

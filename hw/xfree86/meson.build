@@ -1,6 +1,7 @@
 module_abi_dir = join_paths(module_dir, module_abi_tag)
 
 xorg_inc = include_directories(
+    '.',
     'common',
     'ddc',
     'i2c',
@@ -18,10 +19,18 @@ xorg_c_args = []
 xorg_c_args += '-DHAVE_XORG_CONFIG_H'
 xorg_c_args += '-DXORG_NO_SDKSYMS'
 xorg_c_args += ('-DXORG_MODULE_ABI_TAG="'+module_abi_tag+'"')
+if build_static
+    xorg_c_args += '-DXORG_STATIC'
+endif
+
+xorg_module_type = build_static ? 'static_library' : 'shared_module'
+xorg_modules = []
+xorg_builtin_modules = []
+xorg_module_server = []
 
 pciaccess_dep = []
 if get_option('pciaccess')
-    pciaccess_dep = dependency('pciaccess', version: '>= 0.12.901')
+    pciaccess_dep = dependency('pciaccess', version: '>= 0.12.901', static: build_static)
 endif
 
 # subdirs for convenience libraries statically linked into Xorg
@@ -65,7 +74,6 @@ xorg_link = [
     xorg_ramdac,
     libxserver_fb,
     libxserver_xext_vidmode,
-    libxserver_main,
     libxserver_config,
 ]
 if build_dri1
@@ -86,7 +94,7 @@ xorg_deps = [
     dl_dep,
     pciaccess_dep,
     sha1_dep,
-    dependency('xau'),
+    dependency('xau', static: build_static),
     xdmcp_dep,
     xfont2_dep,
     xshmfence_dep,
@@ -100,11 +108,42 @@ else
     xorg_install_dir = get_option('bindir')
 endif
 
+if build_static
+    # Build modules first so their archives can be linked into the server.
+    subdir('dixmods')
+    subdir('exa')
+    subdir('fbdevhw')
+    if build_glamor and build_gbm
+        subdir('glamor_egl')
+    endif
+    if int10 != 'false'
+        if int10 == 'x86emu'
+            subdir('x86emu')
+        endif
+        subdir('int10')
+    endif
+    subdir('shadowfb')
+    if build_vgahw
+        subdir('vgahw')
+    endif
+    subdir('drivers')
+
+    builtin_conf = configuration_data()
+    builtin_conf.set('BUILTIN_MODULES', '\n'.join(xorg_builtin_modules))
+    configure_file(
+        input: 'loader/builtin-modules.h.in',
+        output: 'builtin-modules.h',
+        configuration: builtin_conf,
+    )
+    xorg_link += xorg_modules
+    linker_export_flags = []
+endif
+
 xserver_exec = executable(
     'Xorg',
     srcs_xorg,
     include_directories: [inc, xorg_inc],
-    link_whole: xorg_link,
+    link_whole: [xorg_link, libxserver_main],
     dependencies: xorg_deps,
     link_args: linker_export_flags,
     c_args: xorg_c_args,
@@ -114,24 +153,27 @@ xserver_exec = executable(
 )
 
 # subdirs for modules loadable by Xorg
-subdir('dixmods')
-subdir('exa')
-subdir('fbdevhw')
-if build_glamor and build_gbm
-    subdir('glamor_egl')
-endif
-if int10 != 'false'
-    if int10 == 'x86emu'
-        subdir('x86emu')
+if not build_static
+    xorg_module_server = xserver_exec
+    subdir('dixmods')
+    subdir('exa')
+    subdir('fbdevhw')
+    if build_glamor and build_gbm
+        subdir('glamor_egl')
     endif
-    subdir('int10')
-endif
-subdir('shadowfb')
-if build_vgahw
-    subdir('vgahw')
-endif
+    if int10 != 'false'
+        if int10 == 'x86emu'
+            subdir('x86emu')
+        endif
+        subdir('int10')
+    endif
+    subdir('shadowfb')
+    if build_vgahw
+        subdir('vgahw')
+    endif
 
-subdir('drivers')
+    subdir('drivers')
+endif
 
 install_symlink(
     'X',
@@ -175,18 +217,32 @@ executable('gtf',
 )
 
 # For symbol presence testing only
-xorgserver_lib = shared_library(
-    'xorgserver',
-    srcs_xorg,
-    include_directories: [inc, xorg_inc],
-    link_whole: xorg_link,
-    dependencies: xorg_deps,
-    link_args: linker_export_flags,
-    c_args: xorg_c_args,
-    install: false,
-)
+if not build_static
+    xorgserver_lib = shared_library(
+        'xorgserver',
+        srcs_xorg,
+        include_directories: [inc, xorg_inc],
+        link_whole: xorg_link,
+        dependencies: xorg_deps,
+        link_args: linker_export_flags,
+        c_args: xorg_c_args,
+        install: false,
+    )
 
-xorgserver_dep = declare_dependency(link_with: xorgserver_lib)
+    xorgserver_dep = declare_dependency(link_with: xorgserver_lib)
+endif
+
+if build_static and get_option('tests')
+    static_loader_test = executable(
+        'static-loader-test',
+        [srcs_xorg, 'loader/test-builtin.c'],
+        include_directories: [inc, xorg_inc],
+        link_whole: xorg_link,
+        dependencies: xorg_deps,
+        c_args: xorg_c_args,
+    )
+    test('static module loader', static_loader_test, suite: 'static')
+endif
 
 install_man(configure_file(
     input: 'man/Xorg.man',

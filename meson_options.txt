@@ -2,6 +2,12 @@ option('xorg', type: 'combo', choices: ['true', 'false', 'auto'], value: 'auto',
        description: 'Enable Xorg X Server')
 option('xorg-sdk', type: 'boolean', value: false,
        description: 'Enable Xorg X Server SDK (enabled with xorg)')
+option('static', type: 'boolean', value: false,
+       description: 'Link servers and Xorg modules statically (requires static dependency archives)')
+option('static_dri_drivers', type: 'array', value: [],
+       description: 'DRI driver names to link into static GLX (for example swrast,iris)')
+option('static_dri_dependency', type: 'string', value: '',
+       description: 'pkg-config package providing static DRI driver archives and their dependencies')
 option('xephyr', type: 'boolean', value: false,
        description: 'Enable Xephyr nested X server')
 option('xfake', type: 'boolean', value: false,

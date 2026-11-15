@@ -52,6 +52,7 @@
 #include "loader.h"
 #include "loaderProcs.h"
 
+#ifndef XORG_STATIC
 #ifdef HAVE_DLFCN_H
 
 #include <dlfcn.h>
@@ -59,6 +60,7 @@
 
 #else
 #error i have no dynamic linker and i must scream
+#endif
 #endif
 
 #ifndef XORG_NO_SDKSYMS
@@ -96,6 +98,7 @@ LoaderClose(void)
 
 /* Public Interface to the loader. */
 
+#ifndef XORG_STATIC
 void *
 LoaderOpen(const char *module, int *errmaj)
 {
@@ -150,6 +153,7 @@ LoaderUnload(const char *name, void *handle)
     if (handle)
         dlclose(handle);
 }
+#endif
 
 Bool LoaderIgnoreAbi = FALSE;
 Bool is_nvidia_proprietary = FALSE;

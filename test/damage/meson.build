@@ -1,5 +1,5 @@
-xcb_dep = dependency('xcb', required: false)
-xcb_damage_dep = dependency('xcb-damage', required: false)
+xcb_dep = dependency('xcb', static: build_static, required: false)
+xcb_damage_dep = dependency('xcb-damage', static: build_static, required: false)
 
 if get_option('xvfb')
     if xcb_dep.found() and xcb_damage_dep.found()

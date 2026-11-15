@@ -1,12 +1,15 @@
 glamoregl_src = [
     'glamor_xf86_egl.c',
     'glamor_eglmodule.c',
-    'glamor_xf86_xv.c',
 ]
+if build_xv
+    glamoregl_src += 'glamor_xf86_xv.c'
+endif
 
-shared_module(
+xorg_modules += build_target(
     'glamoregl',
     glamoregl_src,
+    target_type: xorg_module_type,
 
     include_directories: [inc, xorg_inc],
     c_args: xorg_c_args,
@@ -17,6 +20,7 @@ shared_module(
     ],
     link_with: [glamor ],
 
-    install: true,
+    install: not build_static,
     install_dir: module_abi_dir,
 )
+xorg_builtin_modules += 'BUILTIN_MODULE(glamoregl, "")'

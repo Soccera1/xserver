@@ -9,17 +9,17 @@ srcs = [
 
 xephyr_dep = [
     common_dep,
-    dependency('xcb'),
-    dependency('xcb-shape'),
-    dependency('xcb-render'),
-    dependency('xcb-renderutil'),
-    dependency('xcb-aux'),
-    dependency('xcb-image'),
-    dependency('xcb-icccm'),
-    dependency('xcb-shm', version : '>=1.9.3'),
-    dependency('xcb-keysyms'),
-    dependency('xcb-randr'),
-    dependency('xcb-xkb'),
+    dependency('xcb', static: build_static),
+    dependency('xcb-shape', static: build_static),
+    dependency('xcb-render', static: build_static),
+    dependency('xcb-renderutil', static: build_static),
+    dependency('xcb-aux', static: build_static),
+    dependency('xcb-image', static: build_static),
+    dependency('xcb-icccm', static: build_static),
+    dependency('xcb-shm', static: build_static, version : '>=1.9.3'),
+    dependency('xcb-keysyms', static: build_static),
+    dependency('xcb-randr', static: build_static),
+    dependency('xcb-xkb', static: build_static),
 ]
 
 xephyr_glamor = []
@@ -27,12 +27,12 @@ if build_glamor
     srcs += 'ephyr_glamor.c'
     xephyr_glamor += glamor
     xephyr_dep += epoxy_dep
-    xephyr_dep += dependency('xcb-glx')
+    xephyr_dep += dependency('xcb-glx', static: build_static)
 endif
 
 if build_xv
     srcs += 'ephyrvideo.c'
-    xephyr_dep += dependency('xcb-xv')
+    xephyr_dep += dependency('xcb-xv', static: build_static)
 endif
 
 # mingw needs this for nanosleep()

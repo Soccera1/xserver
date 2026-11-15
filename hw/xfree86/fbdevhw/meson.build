@@ -4,15 +4,17 @@ else
     srcs_fbdevhw = 'fbdevhwstub.c'
 endif
 
-shared_module('fbdevhw',
+xorg_modules += build_target('fbdevhw',
     srcs_fbdevhw,
+    target_type: xorg_module_type,
     include_directories: [ inc, xorg_inc ],
     dependencies: common_dep,
     c_args: xorg_c_args,
-    install: true,
+    install: not build_static,
     install_dir: module_abi_dir,
-    link_with: xserver_exec,
+    link_with: xorg_module_server,
 )
+xorg_builtin_modules += 'BUILTIN_MODULE(fbdevhw, "")'
 
 install_man(configure_file(
     input: 'man/fbdevhw.man',

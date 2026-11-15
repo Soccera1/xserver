@@ -1,5 +1,5 @@
-xcb_dep = dependency('xcb', required: false)
-xcb_sync_dep = dependency('xcb-sync', required: false)
+xcb_dep = dependency('xcb', static: build_static, required: false)
+xcb_sync_dep = dependency('xcb-sync', static: build_static, required: false)
 
 if get_option('xvfb')
     if xcb_dep.found() and xcb_sync_dep.found()

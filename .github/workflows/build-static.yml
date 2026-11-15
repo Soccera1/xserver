@@ -1,0 +1,31 @@
+name: Static Linux servers
+
+on:
+    push:
+    pull_request:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - libc: musl
+                      image: alpine:3.22
+                    - libc: glibc
+                      image: ubuntu:24.04
+        name: Static ${{ matrix.libc }}
+        container:
+            image: ${{ matrix.image }}
+        steps:
+            - name: Prepare checkout runtime
+              if: matrix.libc == 'musl'
+              run: apk add --no-cache git gcompat libstdc++ nodejs
+            - uses: actions/checkout@v6
+            - name: Build and test static servers
+              run: sh .github/scripts/static/run-build.sh

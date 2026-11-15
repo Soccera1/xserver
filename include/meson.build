@@ -101,6 +101,9 @@ conf_data.set('LIBDRM_HAS_PLANE_SIZE_HINTS', libdrm_required ? libdrm_dep.versio
 conf_data.set('GLAMOR_HAS_EGL', epoxy_dep.found() ? '1' : false)
 conf_data.set('GLXEXT', build_glx ? '1' : false)
 conf_data.set('GLAMOR', build_glamor ? '1' : false)
+if build_static
+    conf_data.set('XSERVER_STATIC', 1)
+endif
 conf_data.set('GLAMOR_HAS_GBM', build_gbm ? '1' : false)
 conf_data.set('GBM_BO_WITH_MODIFIERS',
               build_glamor and build_gbm and gbm_dep.version().version_compare('>= 17.1') ? '1' : false)
@@ -234,7 +237,9 @@ conf_data.set('DRI2', build_dri2 ? '1' : false)
 conf_data.set('DRI3', build_dri3 ? '1' : false)
 if build_glx
     if build_glx_dri
-        conf_data.set_quoted('DRI_DRIVER_PATH', dri_dep.get_variable(pkgconfig : 'dridriverdir'))
+        if not build_static
+            conf_data.set_quoted('DRI_DRIVER_PATH', dri_dep.get_variable(pkgconfig : 'dridriverdir'))
+        endif
         conf_data.set('BUILD_GLX_DRI', 1)
     endif
 endif
@@ -353,9 +358,11 @@ conf_data.set('WSCONS_SUPPORT', supports_wscons ? '1' : false)
 
 conf_data.set('XSERVER_LIBPCIACCESS', get_option('pciaccess') ? '1' : false)
 if get_option('pciaccess')
-    pciaccess_dep = dependency('pciaccess', required: build_xorg)
+    pciaccess_dep = dependency('pciaccess', required: build_xorg, static: build_static)
     conf_data.set('HAVE_PCI_DEVICE_IS_BOOT_DISPLAY',
-                  cc.has_function('pci_device_is_boot_display', dependencies: pciaccess_dep) ? '1' : false)
+                  cc.has_function('pci_device_is_boot_display',
+                                  prefix: '#include <pciaccess.h>',
+                                  dependencies: pciaccess_dep) ? '1' : false)
 endif
 conf_data.set('XSERVER_PLATFORM_BUS', build_udev_kms ? '1' : false)
 conf_data.set('XSERVER_SCREEN_VRR', '1')

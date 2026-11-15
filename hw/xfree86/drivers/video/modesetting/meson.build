@@ -8,9 +8,10 @@ modesetting_srcs = [
     'vblank.c',
 ]
 
-shared_module(
+xorg_modules += build_target(
     'modesetting_drv',
     modesetting_srcs,
+    target_type: xorg_module_type,
     name_prefix: '',
 
     include_directories: [inc, xorg_inc],
@@ -22,9 +23,10 @@ shared_module(
         gbm_dep,
     ],
 
-    install: true,
+    install: not build_static,
     install_dir: join_paths(module_abi_dir, 'drivers'),
 )
+xorg_builtin_modules += 'BUILTIN_MODULE(modesetting, "drivers")'
 
 # Test that we don't have any unresolved symbols from our module to Xorg.
 xorg_build_root = join_paths(meson.project_build_root(), 'hw', 'xfree86')
@@ -45,7 +47,9 @@ install_man(configure_file(
     configuration: manpage_config,
 ))
 
-test('modesetting symbol test',
-    xorg_symbol_test,
-    args: symbol_test_args,
-)
+if not build_static
+    test('modesetting symbol test',
+        xorg_symbol_test,
+        args: symbol_test_args,
+    )
+endif

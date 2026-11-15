@@ -1,0 +1,2 @@
+/* Generated list of DRI entry points supplied by static_dri_dependency. */
+@BUILTIN_DRI_DRIVERS@
